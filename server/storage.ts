@@ -72,35 +72,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchEvents(params: EventSearchParams): Promise<EventWithAdmin[]> {
-    let query = db
-      .select({
-        id: events.id,
-        title: events.title,
-        description: events.description,
-        venue: events.venue,
-        startDate: events.startDate,
-        endDate: events.endDate,
-        startTime: events.startTime,
-        endTime: events.endTime,
-        cost: events.cost,
-        eventType: events.eventType,
-        location: events.location,
-        imageUrl: events.imageUrl,
-        adminId: events.adminId,
-        isAiGenerated: events.isAiGenerated,
-        createdAt: events.createdAt,
-        admin: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          password: users.password,
-          role: users.role,
-          createdAt: users.createdAt,
-        }
-      })
-      .from(events)
-      .leftJoin(users, eq(events.adminId, users.id));
-
     const conditions = [];
 
     if (params.search) {
@@ -116,49 +87,35 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (params.date) {
-      const searchDate = new Date(params.date);
-      conditions.push(eq(events.startDate, searchDate));
+      conditions.push(eq(events.startDate, params.date));
     }
 
+    let searchedEvents;
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      searchedEvents = await db.select().from(events).where(and(...conditions)).orderBy(desc(events.createdAt));
+    } else {
+      searchedEvents = await db.select().from(events).orderBy(desc(events.createdAt));
     }
 
-    return await query.orderBy(desc(events.createdAt));
+    const result: EventWithAdmin[] = [];
+    for (const event of searchedEvents) {
+      const [admin] = await db.select().from(users).where(eq(users.id, event.adminId));
+      if (admin) {
+        result.push({ ...event, admin });
+      }
+    }
+
+    return result;
   }
 
   async getEvent(id: number): Promise<EventWithAdmin | undefined> {
-    const [event] = await db
-      .select({
-        id: events.id,
-        title: events.title,
-        description: events.description,
-        venue: events.venue,
-        startDate: events.startDate,
-        endDate: events.endDate,
-        startTime: events.startTime,
-        endTime: events.endTime,
-        cost: events.cost,
-        eventType: events.eventType,
-        location: events.location,
-        imageUrl: events.imageUrl,
-        adminId: events.adminId,
-        isAiGenerated: events.isAiGenerated,
-        createdAt: events.createdAt,
-        admin: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          password: users.password,
-          role: users.role,
-          createdAt: users.createdAt,
-        }
-      })
-      .from(events)
-      .leftJoin(users, eq(events.adminId, users.id))
-      .where(eq(events.id, id));
-
-    return event || undefined;
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    if (!event) return undefined;
+    
+    const [admin] = await db.select().from(users).where(eq(users.id, event.adminId));
+    if (!admin) return undefined;
+    
+    return { ...event, admin };
   }
 
   async updateEvent(id: number, eventData: Partial<InsertEvent>): Promise<Event | undefined> {
@@ -175,7 +132,7 @@ export class DatabaseStorage implements IStorage {
       .delete(events)
       .where(and(eq(events.id, id), eq(events.adminId, adminId)));
     
-    return result.rowCount > 0;
+    return Array.isArray(result) ? result.length > 0 : true;
   }
 }
 

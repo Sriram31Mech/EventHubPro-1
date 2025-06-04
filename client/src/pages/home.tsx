@@ -25,8 +25,8 @@ export default function Home() {
   const handleSearch = () => {
     setSearchParams({
       search: localSearch || undefined,
-      eventType: localType || undefined,
-      location: localLocation || undefined,
+      eventType: localType === "all" ? undefined : localType || undefined,
+      location: localLocation === "all" ? undefined : localLocation || undefined,
       date: localDate || undefined,
     });
   };
@@ -110,7 +110,7 @@ export default function Home() {
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Types</SelectItem>
+                    <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="conference">Conference</SelectItem>
                     <SelectItem value="workshop">Workshop</SelectItem>
                     <SelectItem value="networking">Networking</SelectItem>
@@ -126,7 +126,7 @@ export default function Home() {
                     <SelectValue placeholder="All Locations" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Locations</SelectItem>
+                    <SelectItem value="all">All Locations</SelectItem>
                     <SelectItem value="New York">New York</SelectItem>
                     <SelectItem value="London">London</SelectItem>
                     <SelectItem value="San Francisco">San Francisco</SelectItem>
