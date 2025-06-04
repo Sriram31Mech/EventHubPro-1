@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import { generateEventDescription } from "./openai";
+import mongoose from "mongoose";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -91,14 +92,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate JWT token
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
+        { _id: user._id, email: user.email, role: user.role },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
 
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+
       res.json({
         message: "User registered successfully",
-        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        user: userWithoutPassword,
         token
       });
     } catch (error: any) {
@@ -121,14 +125,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
+        { _id: user._id, email: user.email, role: user.role },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
 
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+
       res.json({
         message: "Login successful",
-        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        user: userWithoutPassword,
         token
       });
     } catch (error: any) {
@@ -139,13 +146,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user
   app.get("/api/auth/me", authenticateToken, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.id);
+      const user = await storage.getUser(req.user._id);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+
       res.json({
-        user: { id: user.id, name: user.name, email: user.email, role: user.role }
+        user: userWithoutPassword
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -163,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const event = await storage.createEvent({
         ...eventData,
-        adminId: req.user.id,
+        adminId: req.user._id,
         imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
       });
 
@@ -193,7 +203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get admin's events
   app.get("/api/events/my", authenticateToken, requireAdmin, async (req: any, res) => {
     try {
-      const events = await storage.getEventsByAdmin(req.user.id);
+      const events = await storage.getEventsByAdmin(req.user._id);
       res.json({ events });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -203,13 +213,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get single event
   app.get("/api/events/:id", async (req, res) => {
     try {
-      const eventId = parseInt(req.params.id);
-      const event = await storage.getEvent(eventId);
-      
+      const event = await storage.getEvent(req.params.id);
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
-
       res.json({ event });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -217,29 +224,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update event
-  app.put("/api/events/:id", authenticateToken, requireAdmin, upload.single('image'), async (req: any, res) => {
+  app.put("/api/events/:id", authenticateToken, requireAdmin, async (req: any, res) => {
     try {
-      const eventId = parseInt(req.params.id);
-      const eventData = insertEventSchema.partial().parse({
-        ...req.body,
-        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
-        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
-      });
-
-      if (req.file) {
-        eventData.imageUrl = `/uploads/${req.file.filename}`;
-      }
-
-      const event = await storage.updateEvent(eventId, eventData);
-      
+      const event = await storage.getEvent(req.params.id);
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
 
-      res.json({
-        message: "Event updated successfully",
-        event
-      });
+      if (event.adminId !== req.user._id) {
+        return res.status(403).json({ message: "You can only update your own events" });
+      }
+
+      const updatedEvent = await storage.updateEvent(req.params.id, req.body);
+      res.json({ event: updatedEvent });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
@@ -248,11 +245,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete event
   app.delete("/api/events/:id", authenticateToken, requireAdmin, async (req: any, res) => {
     try {
-      const eventId = parseInt(req.params.id);
-      const deleted = await storage.deleteEvent(eventId, req.user.id);
+      const deleted = await storage.deleteEvent(req.params.id, req.user._id);
       
       if (!deleted) {
-        return res.status(404).json({ message: "Event not found or not authorized" });
+        return res.status(404).json({ message: "Event not found or you don't have permission to delete it" });
       }
 
       res.json({ message: "Event deleted successfully" });
@@ -281,6 +277,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const httpServer = createServer(app);
-  return httpServer;
+  const server = createServer(app);
+  return server;
 }
+
+

@@ -1,10 +1,11 @@
 import { apiRequest } from "./queryClient";
 
 export interface User {
-  id: number;
+  _id: string;
   name: string;
   email: string;
   role: "admin" | "user";
+  createdAt: string | null;
 }
 
 export interface AuthResponse {
@@ -27,23 +28,39 @@ export interface RegisterRequest {
 
 export const authAPI = {
   login: async (data: LoginRequest): Promise<AuthResponse> => {
-    const response = await apiRequest("POST", "/api/auth/login", data);
-    const result = await response.json();
-    
-    // Store token in localStorage
-    localStorage.setItem("auth_token", result.token);
-    
-    return result;
+    try {
+      const response = await apiRequest("POST", "/api/auth/login", data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Login failed');
+      }
+      const result = await response.json();
+      
+      // Store token in localStorage
+      localStorage.setItem("auth_token", result.token);
+      
+      return result;
+    } catch (error: any) {
+      throw new Error(error.message || 'Login failed');
+    }
   },
 
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
-    const response = await apiRequest("POST", "/api/auth/register", data);
-    const result = await response.json();
-    
-    // Store token in localStorage
-    localStorage.setItem("auth_token", result.token);
-    
-    return result;
+    try {
+      const response = await apiRequest("POST", "/api/auth/register", data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Registration failed');
+      }
+      const result = await response.json();
+      
+      // Store token in localStorage
+      localStorage.setItem("auth_token", result.token);
+      
+      return result;
+    } catch (error: any) {
+      throw new Error(error.message || 'Registration failed');
+    }
   },
 
   logout: () => {

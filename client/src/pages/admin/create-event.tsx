@@ -37,6 +37,7 @@ export default function AdminCreateEvent() {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const currentUser = authAPI.getCurrentUser();
 
   // Check if user is admin
   if (!authAPI.isAdmin()) {
@@ -62,11 +63,26 @@ export default function AdminCreateEvent() {
 
   const createEventMutation = useMutation({
     mutationFn: (data: CreateEventForm) => {
-      const eventData = {
-        ...data,
-        image: selectedFile || undefined,
-      };
-      return eventsAPI.createEvent(eventData);
+      const formData = new FormData();
+      
+      // Add all form fields to FormData
+      Object.entries(data).forEach(([key, value]) => {
+        if (key !== 'image') {
+          formData.append(key, value);
+        }
+      });
+
+      // Add the current user's ID as adminId
+      if (currentUser?._id) {
+        formData.append('adminId', currentUser._id);
+      }
+
+      // Add the file if selected
+      if (selectedFile) {
+        formData.append('image', selectedFile);
+      }
+
+      return eventsAPI.createEvent(formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });

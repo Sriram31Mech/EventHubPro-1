@@ -1,6 +1,6 @@
-import { users, events, type User, type InsertUser, type Event, type InsertEvent, type EventSearchParams } from "@shared/schema";
-import { db } from "./db";
-import { eq, and, desc, ilike } from "drizzle-orm";
+import { type User, type InsertUser, type Event, type InsertEvent, type EventSearchParams } from "@shared/schema";
+import { User as UserModel, Event as EventModel } from "./db"; // ✅ No more error
+import mongoose from "mongoose";
 
 export interface EventWithAdmin extends Event {
   admin: User;
@@ -8,131 +8,147 @@ export interface EventWithAdmin extends Event {
 
 export interface IStorage {
   // User operations
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   // Event operations
-  createEvent(event: InsertEvent & { adminId: number }): Promise<Event>;
-  getEventsByAdmin(adminId: number): Promise<Event[]>;
+  createEvent(event: InsertEvent & { adminId: string }): Promise<Event>;
+  getEventsByAdmin(adminId: string): Promise<Event[]>;
   getAllEvents(): Promise<EventWithAdmin[]>;
   searchEvents(params: EventSearchParams): Promise<EventWithAdmin[]>;
-  getEvent(id: number): Promise<EventWithAdmin | undefined>;
-  updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined>;
-  deleteEvent(id: number, adminId: number): Promise<boolean>;
+  getEvent(id: string): Promise<EventWithAdmin | undefined>;
+  updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined>;
+  deleteEvent(id: string, adminId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+  private convertUserToSchema(user: any): User {
+    return {
+      _id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      password: user.password,
+      role: user.role,
+      createdAt: user.createdAt || null
+    };
+  }
+
+  private convertEventToSchema(event: any): Event {
+    return {
+      _id: event._id.toString(),
+      title: event.title,
+      description: event.description,
+      venue: event.venue,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      cost: event.cost,
+      eventType: event.eventType,
+      location: event.location,
+      imageUrl: event.imageUrl || null,
+      adminId: event.adminId.toString(),
+      isAiGenerated: event.isAiGenerated || false,
+      createdAt: event.createdAt || null
+    };
+  }
+
+  private convertEventWithAdminToSchema(event: any): EventWithAdmin {
+    const admin = event.adminId;
+    return {
+      ...this.convertEventToSchema(event),
+      admin: this.convertUserToSchema(admin)
+    };
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const user = await UserModel.findById(id);
+    if (!user) return undefined;
+    return this.convertUserToSchema(user);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
+    const user = await UserModel.findOne({ email });
+    if (!user) return undefined;
+    return this.convertUserToSchema(user);
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
-    return user;
+    const user = await UserModel.create(insertUser);
+    return this.convertUserToSchema(user);
   }
 
-  async createEvent(eventData: InsertEvent & { adminId: number }): Promise<Event> {
-    const [event] = await db
-      .insert(events)
-      .values(eventData)
-      .returning();
-    return event;
+  async createEvent(eventData: InsertEvent & { adminId: string }): Promise<Event> {
+    const event = await EventModel.create({
+      ...eventData,
+      adminId: new mongoose.Types.ObjectId(eventData.adminId)
+    });
+    return this.convertEventToSchema(event);
   }
 
-  async getEventsByAdmin(adminId: number): Promise<Event[]> {
-    return await db
-      .select()
-      .from(events)
-      .where(eq(events.adminId, adminId))
-      .orderBy(desc(events.createdAt));
+  async getEventsByAdmin(adminId: string): Promise<Event[]> {
+    const events = await EventModel.find({ adminId: new mongoose.Types.ObjectId(adminId) })
+      .sort({ createdAt: -1 });
+    return events.map(event => this.convertEventToSchema(event));
   }
 
   async getAllEvents(): Promise<EventWithAdmin[]> {
-    const allEvents = await db.select().from(events).orderBy(desc(events.createdAt));
-    const result: EventWithAdmin[] = [];
+    const events = await EventModel.find()
+      .sort({ createdAt: -1 })
+      .populate('adminId');
     
-    for (const event of allEvents) {
-      const [admin] = await db.select().from(users).where(eq(users.id, event.adminId));
-      if (admin) {
-        result.push({ ...event, admin });
-      }
-    }
-    
-    return result;
+    return events.map(event => this.convertEventWithAdminToSchema(event));
   }
 
   async searchEvents(params: EventSearchParams): Promise<EventWithAdmin[]> {
-    const conditions = [];
+    const query: any = {};
 
     if (params.search) {
-      conditions.push(ilike(events.title, `%${params.search}%`));
+      query.title = { $regex: params.search, $options: 'i' };
     }
 
     if (params.eventType) {
-      conditions.push(eq(events.eventType, params.eventType));
+      query.eventType = params.eventType;
     }
 
     if (params.location) {
-      conditions.push(ilike(events.location, `%${params.location}%`));
+      query.location = { $regex: params.location, $options: 'i' };
     }
 
     if (params.date) {
-      conditions.push(eq(events.startDate, params.date));
+      query.startDate = params.date;
     }
 
-    let searchedEvents;
-    if (conditions.length > 0) {
-      searchedEvents = await db.select().from(events).where(and(...conditions)).orderBy(desc(events.createdAt));
-    } else {
-      searchedEvents = await db.select().from(events).orderBy(desc(events.createdAt));
-    }
+    const events = await EventModel.find(query)
+      .sort({ createdAt: -1 })
+      .populate('adminId');
 
-    const result: EventWithAdmin[] = [];
-    for (const event of searchedEvents) {
-      const [admin] = await db.select().from(users).where(eq(users.id, event.adminId));
-      if (admin) {
-        result.push({ ...event, admin });
-      }
-    }
-
-    return result;
+    return events.map(event => this.convertEventWithAdminToSchema(event));
   }
 
-  async getEvent(id: number): Promise<EventWithAdmin | undefined> {
-    const [event] = await db.select().from(events).where(eq(events.id, id));
+  async getEvent(id: string): Promise<EventWithAdmin | undefined> {
+    const event = await EventModel.findById(id).populate('adminId');
     if (!event) return undefined;
-    
-    const [admin] = await db.select().from(users).where(eq(users.id, event.adminId));
-    if (!admin) return undefined;
-    
-    return { ...event, admin };
+    return this.convertEventWithAdminToSchema(event);
   }
 
-  async updateEvent(id: number, eventData: Partial<InsertEvent>): Promise<Event | undefined> {
-    const [event] = await db
-      .update(events)
-      .set(eventData)
-      .where(eq(events.id, id))
-      .returning();
-    return event || undefined;
+  async updateEvent(id: string, eventData: Partial<InsertEvent>): Promise<Event | undefined> {
+    const event = await EventModel.findByIdAndUpdate(
+      id,
+      { $set: eventData },
+      { new: true }
+    );
+    if (!event) return undefined;
+    return this.convertEventToSchema(event);
   }
 
-  async deleteEvent(id: number, adminId: number): Promise<boolean> {
-    const result = await db
-      .delete(events)
-      .where(and(eq(events.id, id), eq(events.adminId, adminId)));
-    
-    return Array.isArray(result) ? result.length > 0 : true;
+  async deleteEvent(id: string, adminId: string): Promise<boolean> {
+    const result = await EventModel.deleteOne({
+      _id: new mongoose.Types.ObjectId(id),
+      adminId: new mongoose.Types.ObjectId(adminId)
+    });
+    return result.deletedCount > 0;
   }
 }
 
