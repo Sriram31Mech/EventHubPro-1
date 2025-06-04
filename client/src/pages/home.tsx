@@ -120,7 +120,7 @@ export default function HomePage() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {events.map((event) => (
-              <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/events/${event._id}`)}>
                 {event.imageUrl && (
                   <div className="aspect-video w-full overflow-hidden">
                     <img
@@ -156,13 +156,6 @@ export default function HomePage() {
                       <span className="mx-2">•</span>
                       <span>{event.cost}</span>
                     </div>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => navigate(`/events/${event._id}`)}
-                    >
-                      View Details
-                    </Button>
                   </div>
                 </CardContent>
               </Card>

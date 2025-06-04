@@ -1,28 +1,7 @@
 import { apiRequest } from "./queryClient";
 import { getAuthHeaders } from "./auth";
-
-export interface Event {
-  _id: string;
-  title: string;
-  description: string;
-  venue: string;
-  startDate: string;
-  endDate: string;
-  startTime: string;
-  endTime: string;
-  cost: string;
-  eventType: string;
-  location: string;
-  imageUrl?: string;
-  adminId: string;
-  isAiGenerated: boolean;
-  createdAt: string;
-  admin?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-}
+import type { Event, EventSearchParams } from "@shared/schema";
+import { handleResponse } from "./utils";
 
 export interface CreateEventRequest {
   title: string;
@@ -38,14 +17,25 @@ export interface CreateEventRequest {
   image?: File;
 }
 
-export interface EventSearchParams {
-  search?: string;
-  eventType?: string;
-  location?: string;
-  date?: string;
-}
-
 export const eventsAPI = {
+  getAllEvents: async (params?: EventSearchParams): Promise<Event[]> => {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set("search", params.search);
+    if (params?.eventType && params.eventType !== "all") searchParams.set("eventType", params.eventType);
+    if (params?.location) searchParams.set("location", params.location);
+    if (params?.date) searchParams.set("date", params.date);
+
+    const response = await fetch(`/api/events?${searchParams.toString()}`);
+    const data = await handleResponse(response);
+    return data.events;
+  },
+
+  getEvent: async (id: string): Promise<Event> => {
+    const response = await fetch(`/api/events/${id}`);
+    const data = await handleResponse(response);
+    return data.event;
+  },
+
   createEvent: async (formData: FormData): Promise<Event> => {
     const response = await fetch("/api/events", {
       method: "POST",
@@ -53,30 +43,9 @@ export const eventsAPI = {
         ...getAuthHeaders(),
       },
       body: formData,
-      credentials: "include",
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || response.statusText);
-    }
-
-    const result = await response.json();
-    return result.event;
-  },
-
-  getAllEvents: async (params?: EventSearchParams): Promise<Event[]> => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value);
-      });
-    }
-
-    const url = `/api/events${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await apiRequest("GET", url);
-    const result = await response.json();
-    return result.events;
+    const data = await handleResponse(response);
+    return data.event;
   },
 
   getMyEvents: async (): Promise<Event[]> => {
@@ -121,13 +90,10 @@ export const eventsAPI = {
   deleteEvent: async (id: string): Promise<void> => {
     const response = await fetch(`/api/events/${id}`, {
       method: "DELETE",
-      headers: getAuthHeaders(),
-      credentials: "include",
+      headers: {
+        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+      },
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || response.statusText);
-    }
+    await handleResponse(response);
   }
 };

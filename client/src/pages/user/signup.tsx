@@ -54,7 +54,7 @@ export default function UserSignUp() {
         title: "Account created successfully!",
         description: "Welcome to Event Hive. Redirecting to home page...",
       });
-      setTimeout(() => navigate("/"), 2000);
+      setTimeout(() => navigate("/home"), 2000);
     },
     onError: (error: any) => {
       toast({

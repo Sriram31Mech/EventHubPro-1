@@ -1,6 +1,7 @@
 import { type User, type InsertUser, type Event, type InsertEvent, type EventSearchParams } from "@shared/schema";
-import { User as UserModel, Event as EventModel } from "./db"; // ✅ No more error
 import mongoose from "mongoose";
+import { Event as EventModel } from "./models/event";
+import { User as UserModel } from "./models/user";
 
 export interface EventWithAdmin extends Event {
   admin: User;
@@ -47,6 +48,7 @@ export class DatabaseStorage implements IStorage {
       cost: event.cost,
       eventType: event.eventType,
       location: event.location,
+      image: event.image,
       imageUrl: event.imageUrl || null,
       adminId: event.adminId.toString(),
       isAiGenerated: event.isAiGenerated || false,
@@ -105,7 +107,7 @@ export class DatabaseStorage implements IStorage {
     const query: any = {};
 
     if (params.search) {
-      query.title = { $regex: params.search, $options: 'i' };
+      query.$text = { $search: params.search };
     }
 
     if (params.eventType) {
@@ -117,7 +119,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (params.date) {
-      query.startDate = params.date;
+      const searchDate = new Date(params.date);
+      query.startDate = {
+        $gte: searchDate,
+        $lt: new Date(searchDate.getTime() + 24 * 60 * 60 * 1000),
+      };
     }
 
     const events = await EventModel.find(query)
@@ -152,4 +158,5 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
+// Export a single instance of DatabaseStorage
 export const storage = new DatabaseStorage();
