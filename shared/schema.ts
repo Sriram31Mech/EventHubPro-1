@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -19,8 +19,8 @@ export const events = pgTable("events", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   venue: text("venue").notNull(),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
+  startDate: text("start_date").notNull(), // Store as text for easier handling
+  endDate: text("end_date").notNull(),
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),
   cost: text("cost").notNull(), // Store as text for flexibility (FREE, ₹500, etc.)

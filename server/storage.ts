@@ -1,6 +1,10 @@
-import { users, events, type User, type InsertUser, type Event, type InsertEvent, type EventWithAdmin, type EventSearchParams } from "@shared/schema";
+import { users, events, type User, type InsertUser, type Event, type InsertEvent, type EventSearchParams } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, like, desc, ilike } from "drizzle-orm";
+import { eq, and, desc, ilike } from "drizzle-orm";
+
+export interface EventWithAdmin extends Event {
+  admin: User;
+}
 
 export interface IStorage {
   // User operations
@@ -54,35 +58,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllEvents(): Promise<EventWithAdmin[]> {
-    return await db
-      .select({
-        id: events.id,
-        title: events.title,
-        description: events.description,
-        venue: events.venue,
-        startDate: events.startDate,
-        endDate: events.endDate,
-        startTime: events.startTime,
-        endTime: events.endTime,
-        cost: events.cost,
-        eventType: events.eventType,
-        location: events.location,
-        imageUrl: events.imageUrl,
-        adminId: events.adminId,
-        isAiGenerated: events.isAiGenerated,
-        createdAt: events.createdAt,
-        admin: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          password: users.password,
-          role: users.role,
-          createdAt: users.createdAt,
-        }
-      })
-      .from(events)
-      .leftJoin(users, eq(events.adminId, users.id))
-      .orderBy(desc(events.createdAt));
+    const allEvents = await db.select().from(events).orderBy(desc(events.createdAt));
+    const result: EventWithAdmin[] = [];
+    
+    for (const event of allEvents) {
+      const [admin] = await db.select().from(users).where(eq(users.id, event.adminId));
+      if (admin) {
+        result.push({ ...event, admin });
+      }
+    }
+    
+    return result;
   }
 
   async searchEvents(params: EventSearchParams): Promise<EventWithAdmin[]> {
