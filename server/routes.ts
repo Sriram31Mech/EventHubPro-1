@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -11,14 +11,36 @@ import { generateEventDescription } from "./openai";
 import mongoose from "mongoose";
 import fs from "fs";
 
+// Type declarations
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        _id: string;
+        email: string;
+        role: string;
+      };
+    }
+  }
+}
+
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  buffer: Buffer;
+  size: number;
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Multer configuration for file uploads
 const storage_multer = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: function (req: Request, file: MulterFile, cb: (error: Error | null, destination: string) => void) {
     cb(null, 'uploads/');
   },
-  filename: function (req, file, cb) {
+  filename: function (req: Request, file: MulterFile, cb: (error: Error | null, filename: string) => void) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -29,7 +51,7 @@ const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
-  fileFilter: function (req, file, cb) {
+  fileFilter: function (req: Request, file: MulterFile, cb: (error: Error | null, acceptFile: boolean) => void) {
     const allowedTypes = /jpeg|jpg|png/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -37,13 +59,13 @@ const upload = multer({
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Only JPEG, JPG and PNG files are allowed'));
+      cb(new Error('Only JPEG, JPG and PNG files are allowed'), false);
     }
   }
 });
 
 // Middleware to verify JWT token
-function authenticateToken(req: any, res: any, next: any) {
+function authenticateToken(req: Request, res: Response, next: Function) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -61,8 +83,8 @@ function authenticateToken(req: any, res: any, next: any) {
 }
 
 // Middleware to check if user is admin
-function requireAdmin(req: any, res: any, next: any) {
-  if (req.user.role !== 'admin') {
+function requireAdmin(req: Request, res: Response, next: Function) {
+  if (req.user?.role !== 'admin') {
     return res.status(403).json({ message: 'Admin access required' });
   }
   next();
@@ -80,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/uploads', express.static('uploads'));
 
   // Auth routes
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       
@@ -337,18 +359,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { title, venue, eventType, location } = req.body;
       
-      if (!title || !venue) {
-        return res.status(400).json({ message: "Title and venue are required" });
+      // Input validation with detailed feedback
+      if (!title?.trim()) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Please provide an event title",
+          error: "VALIDATION_ERROR" 
+        });
       }
 
-      const description = await generateEventDescription(title, venue, eventType, location);
-      
+      if (!venue?.trim()) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Please provide an event venue",
+          error: "VALIDATION_ERROR" 
+        });
+      }
+
+      // Generate description with retry mechanism
+      let retries = 2;
+      let description: string | null = null;
+      let error: any = null;
+
+      while (retries >= 0 && !description) {
+        try {
+          description = await generateEventDescription(
+            title.trim(), 
+            venue.trim(), 
+            eventType?.trim(), 
+            location?.trim()
+          );
+          break;
+        } catch (e: any) {
+          error = e;
+          if (e.message?.includes('rate limit') || e.message?.includes('busy')) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+            retries--;
+            continue;
+          }
+          throw e;
+        }
+      }
+
+      if (!description) {
+        throw error || new Error('Failed to generate description after retries');
+      }
+
+      // Success response
       res.json({
+        success: true,
         description,
-        isAiGenerated: true
+        isAiGenerated: true,
+        message: "Description generated successfully"
       });
+
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      // Enhanced error logging
+      console.error("AI Description Generation Error:", {
+        error,
+        body: req.body,
+        userId: req.user._id,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Determine appropriate status code and error type
+      let statusCode = 500;
+      let errorType = "AI_GENERATION_ERROR";
+      let message = error.message || "Failed to generate description";
+
+      if (message.includes("API") || message.includes("configuration")) {
+        statusCode = 503;
+        errorType = "SERVICE_ERROR";
+      } else if (message.includes("rate limit") || message.includes("busy")) {
+        statusCode = 429;
+        errorType = "RATE_LIMIT_ERROR";
+      } else if (message.includes("too short") || message.includes("empty")) {
+        statusCode = 422;
+        errorType = "CONTENT_ERROR";
+      }
+
+      // Error response with retry guidance
+      res.status(statusCode).json({
+        success: false,
+        message,
+        error: errorType,
+        retryAfter: statusCode === 429 ? 5 : undefined,
+        suggestion: statusCode === 422 ? "Try providing more specific event details" : undefined
+      });
     }
   });
 

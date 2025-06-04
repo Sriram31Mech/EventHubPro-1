@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Upload, Sparkles } from "lucide-react";
+import { Upload, Sparkles, Calendar, MapPin, Clock, Users, DollarSign, FileText, ImageIcon, CheckCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { eventsAPI } from "@/lib/api";
@@ -31,12 +31,28 @@ const createEventSchema = z.object({
 
 type CreateEventForm = z.infer<typeof createEventSchema>;
 
+const eventTypeIcons = {
+  conference: Users,
+  workshop: FileText,
+  networking: Users,
+  seminar: FileText
+};
+
+const eventTypeColors = {
+  conference: "bg-blue-100 text-blue-600 border-blue-200",
+  workshop: "bg-green-100 text-green-600 border-green-200",
+  networking: "bg-purple-100 text-purple-600 border-purple-200",
+  seminar: "bg-orange-100 text-orange-600 border-orange-200"
+};
+
 export default function AdminCreateEvent() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const currentUser = authAPI.getCurrentUser();
 
   // Check if user is admin
@@ -87,7 +103,7 @@ export default function AdminCreateEvent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({
-        title: "Event created successfully!",
+        title: "🎉 Event created successfully!",
         description: "Redirecting to your dashboard...",
       });
       setTimeout(() => navigate("/admin/dashboard"), 2000);
@@ -107,7 +123,7 @@ export default function AdminCreateEvent() {
     onSuccess: (result) => {
       form.setValue("description", result.description);
       toast({
-        title: "AI Description Generated!",
+        title: "✨ AI Description Generated!",
         description: "You can edit the description as needed.",
       });
     },
@@ -135,9 +151,18 @@ export default function AdminCreateEvent() {
         });
         return;
       }
+      
       setSelectedFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+      
       toast({
-        title: "File selected",
+        title: "📸 File selected",
         description: `${file.name} is ready to upload.`,
       });
     }
@@ -161,199 +186,351 @@ export default function AdminCreateEvent() {
     generateDescriptionMutation.mutate({ title, venue, eventType, location });
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Card className="shadow-xl">
-          <CardContent className="p-8">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Event</h1>
-              <p className="text-gray-600">Fill in the details to create your new event</p>
-            </div>
+  const removeImage = () => {
+    setSelectedFile(null);
+    setImagePreview(null);
+  };
 
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full mb-4">
+            <Calendar className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            Create New Event
+          </h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Bring your vision to life by creating an engaging event that connects people and creates memorable experiences
+          </p>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="mb-8">
+          <div className="flex justify-center">
+            <div className="flex items-center space-x-8">
+              <div className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  1
+                </div>
+                <span className="ml-2 text-sm font-medium text-gray-900">Basic Info</span>
+              </div>
+              <div className={`w-16 h-0.5 ${currentStep >= 2 ? 'bg-indigo-600' : 'bg-gray-200'}`}></div>
+              <div className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'
+                }`}>
+                  2
+                </div>
+                <span className="ml-2 text-sm font-medium text-gray-900">Details</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-8">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                 {/* Basic Event Information */}
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="md:col-span-2">
-                    <FormField
-                      control={form.control}
-                      name="title"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Event Title</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your event title" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                <div className="space-y-8">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <FileText className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900">Event Information</h2>
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <FormField
+                        control={form.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                              <FileText className="h-4 w-4" />
+                              <span>Event Title</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Enter your event title" 
+                                className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <FormField
+                        control={form.control}
+                        name="venue"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                              <MapPin className="h-4 w-4" />
+                              <span>Event Venue</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Enter venue address" 
+                                className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     <FormField
                       control={form.control}
-                      name="venue"
+                      name="startTime"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Event Venue</FormLabel>
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <Clock className="h-4 w-4" />
+                            <span>Start Time</span>
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter venue address" {...field} />
+                            <Input 
+                              type="time" 
+                              className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </div>
 
-                  <FormField
-                    control={form.control}
-                    name="startTime"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Start Time</FormLabel>
-                        <FormControl>
-                          <Input type="time" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="endTime"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>End Time</FormLabel>
-                        <FormControl>
-                          <Input type="time" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="startDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Start Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="endDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>End Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="eventType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Event Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select event type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="conference">Conference</SelectItem>
-                            <SelectItem value="workshop">Workshop</SelectItem>
-                            <SelectItem value="networking">Networking</SelectItem>
-                            <SelectItem value="seminar">Seminar</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Mumbai, Delhi, Bangalore" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="md:col-span-2">
                     <FormField
                       control={form.control}
-                      name="cost"
+                      name="endTime"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Event Cost</FormLabel>
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <Clock className="h-4 w-4" />
+                            <span>End Time</span>
+                          </FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter the cost of the event in INR (e.g., Free, ₹500, ₹1000)" {...field} />
+                            <Input 
+                              type="time" 
+                              className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                              {...field} 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+
+                    <FormField
+                      control={form.control}
+                      name="startDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <Calendar className="h-4 w-4" />
+                            <span>Start Date</span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="date" 
+                              className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="endDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <Calendar className="h-4 w-4" />
+                            <span>End Date</span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="date" 
+                              className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="eventType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <Users className="h-4 w-4" />
+                            <span>Event Type</span>
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors">
+                                <SelectValue placeholder="Select event type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="conference">
+                                <div className="flex items-center space-x-2">
+                                  <Users className="h-4 w-4" />
+                                  <span>Conference</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="workshop">
+                                <div className="flex items-center space-x-2">
+                                  <FileText className="h-4 w-4" />
+                                  <span>Workshop</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="networking">
+                                <div className="flex items-center space-x-2">
+                                  <Users className="h-4 w-4" />
+                                  <span>Networking</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="seminar">
+                                <div className="flex items-center space-x-2">
+                                  <FileText className="h-4 w-4" />
+                                  <span>Seminar</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>Location</span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="e.g., Mumbai, Delhi, Bangalore" 
+                              className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="md:col-span-2">
+                      <FormField
+                        control={form.control}
+                        name="cost"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                              <DollarSign className="h-4 w-4" />
+                              <span>Event Cost</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="Enter the cost of the event in INR (e.g., Free, ₹500, ₹1000)" 
+                                className="h-12 text-lg border-2 focus:border-indigo-500 transition-colors"
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Event Description Section */}
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-gray-900">Event Description</h2>
+                <div className="space-y-8">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <ImageIcon className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900">Media & Description</h2>
+                  </div>
 
                   {/* Event Image Upload */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Event Image</label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-primary transition-colors duration-200">
-                      <div className="space-y-4">
-                        <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                          <Upload className="h-8 w-8 text-gray-400" />
+                    <label className="block text-base font-semibold text-gray-700 mb-4">Event Image</label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-indigo-500 transition-all duration-300 bg-gradient-to-br from-gray-50 to-indigo-50">
+                      {imagePreview ? (
+                        <div className="space-y-4">
+                          <div className="relative inline-block">
+                            <img 
+                              src={imagePreview} 
+                              alt="Preview" 
+                              className="w-48 h-32 object-cover rounded-xl shadow-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={removeImage}
+                              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-sm hover:bg-red-600 transition-colors"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <p className="text-sm text-green-600 font-medium flex items-center justify-center space-x-1">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>{selectedFile?.name}</span>
+                          </p>
                         </div>
-                        <div>
-                          <p className="text-lg font-medium text-gray-900">Upload Here</p>
-                          <p className="text-sm text-gray-500">Max file size: 5MB. Supported formats: JPG, JPEG, PNG</p>
-                          {selectedFile && (
-                            <p className="text-sm text-primary font-medium mt-2">
-                              Selected: {selectedFile.name}
-                            </p>
-                          )}
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center">
+                            <Upload className="h-10 w-10 text-indigo-500" />
+                          </div>
+                          <div>
+                            <p className="text-xl font-semibold text-gray-900">Upload Event Image</p>
+                            <p className="text-gray-500 mt-1">Max file size: 5MB • Supported formats: JPG, JPEG, PNG</p>
+                          </div>
                         </div>
-                        <input
-                          type="file"
-                          accept=".jpg,.jpeg,.png"
-                          onChange={handleFileChange}
-                          className="hidden"
-                          id="event-image-upload"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => document.getElementById('event-image-upload')?.click()}
-                        >
-                          Choose File
-                        </Button>
-                      </div>
+                      )}
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        id="event-image-upload"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        onClick={() => document.getElementById('event-image-upload')?.click()}
+                        className="mt-4 border-2 hover:bg-indigo-50 hover:border-indigo-300"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        {imagePreview ? 'Change Image' : 'Choose File'}
+                      </Button>
                     </div>
                   </div>
 
@@ -363,15 +540,18 @@ export default function AdminCreateEvent() {
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <div className="flex items-center justify-between mb-2">
-                          <FormLabel>Event Description</FormLabel>
+                        <div className="flex items-center justify-between mb-4">
+                          <FormLabel className="text-base font-semibold flex items-center space-x-2">
+                            <FileText className="h-4 w-4" />
+                            <span>Event Description</span>
+                          </FormLabel>
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={generateAIDescription}
                             disabled={generateDescriptionMutation.isPending}
-                            className="ai-gradient text-white border-0 hover:opacity-90"
+                            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:from-purple-600 hover:to-pink-600 shadow-lg"
                           >
                             <Sparkles className="w-4 h-4 mr-2" />
                             {generateDescriptionMutation.isPending ? "Generating..." : "Generate with AI"}
@@ -381,7 +561,7 @@ export default function AdminCreateEvent() {
                           <Textarea
                             rows={6}
                             placeholder="Type here... or use AI to generate a compelling description"
-                            className="resize-none"
+                            className="resize-none text-lg border-2 focus:border-indigo-500 transition-colors"
                             {...field}
                           />
                         </FormControl>
@@ -391,14 +571,23 @@ export default function AdminCreateEvent() {
                   />
                 </div>
 
-                <div className="pt-6">
+                <div className="pt-8 border-t border-gray-200">
                   <Button
                     type="submit"
-                    className="w-full"
-                    size="lg"
+                    className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-xl transform hover:scale-[1.02] transition-all duration-200"
                     disabled={createEventMutation.isPending}
                   >
-                    {createEventMutation.isPending ? "Creating Event..." : "Create Event"}
+                    {createEventMutation.isPending ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Creating Event...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5" />
+                        <span>Create Event</span>
+                      </div>
+                    )}
                   </Button>
                 </div>
               </form>
