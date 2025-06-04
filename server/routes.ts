@@ -9,6 +9,7 @@ import multer from "multer";
 import path from "path";
 import { generateEventDescription } from "./openai";
 import mongoose from "mongoose";
+import fs from "fs";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -165,23 +166,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Event routes
   app.post("/api/events", authenticateToken, requireAdmin, upload.single('image'), async (req: any, res) => {
     try {
-      const eventData = insertEventSchema.parse({
+      // Parse the event data
+      const eventData = {
         ...req.body,
-        startDate: new Date(req.body.startDate),
-        endDate: new Date(req.body.endDate),
+        adminId: req.user._id,
+        imageUrl: req.file ? `/uploads/${req.file.filename}` : null
+      };
+
+      // Validate the event data
+      const validatedData = insertEventSchema.parse({
+        ...eventData,
+        startDate: new Date(eventData.startDate).toISOString(),
+        endDate: new Date(eventData.endDate).toISOString()
       });
 
-      const event = await storage.createEvent({
-        ...eventData,
-        adminId: req.user._id,
-        imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
-      });
+      const event = await storage.createEvent(validatedData);
 
       res.json({
         message: "Event created successfully",
         event
       });
     } catch (error: any) {
+      // If there was an error and a file was uploaded, delete it
+      if (req.file) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          console.error('Failed to delete uploaded file:', unlinkError);
+        }
+      }
+
+      if (error.errors) {
+        return res.status(400).json({ message: JSON.stringify(error.errors, null, 2) });
+      }
+
       res.status(400).json({ message: error.message });
     }
   });

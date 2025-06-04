@@ -1,9 +1,9 @@
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, Play, Users, IndianRupee, Edit, Trash2 } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Plus, Edit, Trash2, Calendar, MapPin, Clock } from "lucide-react";
 import { eventsAPI } from "@/lib/api";
 import { authAPI } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -15,23 +15,26 @@ export default function AdminDashboard() {
   const queryClient = useQueryClient();
 
   // Check if user is admin
-  if (!authAPI.isAdmin()) {
-    navigate("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!authAPI.isAdmin()) {
+      navigate("/");
+    }
+  }, [navigate]);
 
-  const { data: events = [], isLoading } = useQuery({
-    queryKey: ["/api/events/my"],
-    queryFn: eventsAPI.getMyEvents,
+  // Fetch admin's events
+  const { data: events = [], isLoading, error } = useQuery({
+    queryKey: ["admin-events"],
+    queryFn: () => eventsAPI.getMyEvents(),
   });
 
+  // Delete event mutation
   const deleteEventMutation = useMutation({
     mutationFn: eventsAPI.deleteEvent,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events/my"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       toast({
-        title: "Event deleted successfully",
-        description: "The event has been removed from your dashboard.",
+        title: "Event deleted",
+        description: "The event has been successfully deleted.",
       });
     },
     onError: (error: any) => {
@@ -43,227 +46,122 @@ export default function AdminDashboard() {
     },
   });
 
-  const handleDeleteEvent = (eventId: number) => {
-    if (window.confirm("Are you sure you want to delete this event? This action cannot be undone.")) {
+  const handleDelete = (eventId: string) => {
+    if (window.confirm("Are you sure you want to delete this event?")) {
       deleteEventMutation.mutate(eventId);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), "MMMM dd, yyyy");
-  };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center">Loading events...</div>
+        </div>
+      </div>
+    );
+  }
 
-  const formatTime = (timeString: string) => {
-    return format(new Date(`2000-01-01T${timeString}`), "h:mm a");
-  };
-
-  // Calculate stats
-  const totalEvents = events.length;
-  const activeEvents = events.filter(event => new Date(event.endDate) > new Date()).length;
-  const totalAttendees = totalEvents * 50; // Mock calculation
-  const totalRevenue = events.reduce((sum, event) => {
-    const cost = event.cost.toLowerCase();
-    if (cost.includes('free') || cost === '0') return sum;
-    // Extract number from cost string
-    const amount = parseInt(cost.replace(/[^\d]/g, '')) || 0;
-    return sum + amount;
-  }, 0);
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center text-red-600">
+            Failed to load events. Please try again later.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600">Manage your events and track performance</p>
+            <h1 className="text-3xl font-bold text-gray-900">My Events</h1>
+            <p className="text-gray-600 mt-2">Manage your created events</p>
           </div>
-          <Link href="/admin/create-event">
-            <Button size="lg" className="shadow-lg">
-              <Plus className="w-5 h-5 mr-2" />
-              Create New Event
-            </Button>
-          </Link>
+          <Button onClick={() => navigate("/admin/create-event")}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Event
+          </Button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <Card className="shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Total Events</p>
-                  <p className="text-3xl font-bold text-gray-900">{totalEvents}</p>
-                </div>
-                <div className="bg-primary/10 p-3 rounded-full">
-                  <Calendar className="w-6 h-6 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Active Events</p>
-                  <p className="text-3xl font-bold text-green-600">{activeEvents}</p>
-                </div>
-                <div className="bg-green-100 p-3 rounded-full">
-                  <Play className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Total Attendees</p>
-                  <p className="text-3xl font-bold text-blue-600">{totalAttendees.toLocaleString()}</p>
-                </div>
-                <div className="bg-blue-100 p-3 rounded-full">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Revenue</p>
-                  <p className="text-3xl font-bold text-purple-600">₹{totalRevenue.toLocaleString()}</p>
-                </div>
-                <div className="bg-purple-100 p-3 rounded-full">
-                  <IndianRupee className="w-6 h-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* My Events Section */}
-        <Card className="shadow-xl">
-          <CardContent className="p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">My Events</h2>
-              <div className="flex space-x-2">
-                <Button variant="ghost" size="sm">All</Button>
-                <Button variant="ghost" size="sm">Active</Button>
-                <Button variant="ghost" size="sm">Completed</Button>
-              </div>
-            </div>
-
-            {isLoading ? (
+        {events.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
               <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="border border-gray-200 rounded-xl p-6 animate-pulse">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-16 h-16 bg-gray-300 rounded-lg"></div>
-                      <div className="flex-1 space-y-2">
-                        <div className="h-6 bg-gray-300 rounded w-1/3"></div>
-                        <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-                        <div className="h-4 bg-gray-300 rounded w-1/4"></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : events.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">📅</div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-2">No Events Yet</h3>
-                <p className="text-gray-600 mb-6">
+                <h3 className="text-lg font-medium text-gray-900">No Events Yet</h3>
+                <p className="text-gray-600">
                   You haven't created any events yet. Start by creating your first event!
                 </p>
-                <Link href="/admin/create-event">
-                  <Button size="lg">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Create Your First Event
-                  </Button>
-                </Link>
+                <Button onClick={() => navigate("/admin/create-event")}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Your First Event
+                </Button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {events.map((event) => {
-                  const isActive = new Date(event.endDate) > new Date();
-                  const isUpcoming = new Date(event.startDate) > new Date();
-                  
-                  return (
-                    <div
-                      key={event.id}
-                      className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow duration-200"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          {event.imageUrl ? (
-                            <img
-                              src={event.imageUrl}
-                              alt={event.title}
-                              className="w-16 h-16 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-purple-600/20 rounded-lg flex items-center justify-center">
-                              <span className="text-2xl">🎭</span>
-                            </div>
-                          )}
-                          <div>
-                            <h3 className="font-bold text-lg text-gray-900">{event.title}</h3>
-                            <p className="text-gray-600">
-                              {formatDate(event.startDate)} • {formatTime(event.startTime)} - {formatTime(event.endTime)}
-                            </p>
-                            <p className="text-sm text-gray-500">{event.venue}</p>
-                            {event.isAiGenerated && (
-                              <Badge variant="outline" className="mt-1">
-                                AI Generated
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <div className="text-center">
-                            <p className="text-2xl font-bold text-primary">
-                              {Math.floor(Math.random() * 200) + 50}
-                            </p>
-                            <p className="text-sm text-gray-500">Attendees</p>
-                          </div>
-                          <Badge 
-                            variant={isUpcoming ? "secondary" : isActive ? "default" : "outline"}
-                            className={
-                              isUpcoming 
-                                ? "bg-blue-100 text-blue-800" 
-                                : isActive 
-                                ? "bg-green-100 text-green-800" 
-                                : "bg-gray-100 text-gray-800"
-                            }
-                          >
-                            {isUpcoming ? "Upcoming" : isActive ? "Active" : "Completed"}
-                          </Badge>
-                          <div className="flex space-x-2">
-                            <Button variant="outline" size="sm">
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteEvent(event.id)}
-                              className="text-red-600 hover:text-red-700"
-                              disabled={deleteEventMutation.isPending}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {events.map((event) => (
+              <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                {event.imageUrl && (
+                  <div className="aspect-video w-full overflow-hidden">
+                    <img
+                      src={event.imageUrl}
+                      alt={event.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <CardContent className="p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{event.title}</h3>
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center text-gray-600">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      <span>
+                        {format(new Date(event.startDate), "MMM d, yyyy")}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    <div className="flex items-center text-gray-600">
+                      <Clock className="w-4 h-4 mr-2" />
+                      <span>{event.startTime} - {event.endTime}</span>
+                    </div>
+                    <div className="flex items-center text-gray-600">
+                      <MapPin className="w-4 h-4 mr-2" />
+                      <span>{event.location}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center pt-4 border-t">
+                    <div className="text-sm font-medium">
+                      <span className="text-primary">{event.eventType}</span>
+                      <span className="mx-2">•</span>
+                      <span>{event.cost}</span>
+                    </div>
+                    <div className="space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/admin/edit-event/${event._id}`)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(event._id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,221 +1,175 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Play } from "lucide-react";
-import EventCard from "@/components/event-card";
-import { eventsAPI, EventSearchParams } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar, MapPin, Clock, Search } from "lucide-react";
+import { eventsAPI } from "@/lib/api";
+import { format } from "date-fns";
 
-export default function Home() {
-  const { toast } = useToast();
-  const [searchParams, setSearchParams] = useState<EventSearchParams>({});
-  const [localSearch, setLocalSearch] = useState("");
-  const [localType, setLocalType] = useState("");
-  const [localLocation, setLocalLocation] = useState("");
-  const [localDate, setLocalDate] = useState("");
-
-  const { data: events = [], isLoading } = useQuery({
-    queryKey: ["/api/events", searchParams],
-    queryFn: () => eventsAPI.getAllEvents(searchParams),
+export default function HomePage() {
+  const [, navigate] = useLocation();
+  const [searchParams, setSearchParams] = useState({
+    search: "",
+    eventType: "all",
+    location: "",
+    date: "",
   });
 
-  const handleSearch = () => {
-    setSearchParams({
-      search: localSearch || undefined,
-      eventType: localType === "all" ? undefined : localType || undefined,
-      location: localLocation === "all" ? undefined : localLocation || undefined,
-      date: localDate || undefined,
-    });
-  };
+  const { data: events = [], isLoading } = useQuery({
+    queryKey: ["events", searchParams],
+    queryFn: () => eventsAPI.getAllEvents({
+      ...searchParams,
+      eventType: searchParams.eventType === "all" ? "" : searchParams.eventType
+    }),
+  });
 
-  const handleDiscoverNow = () => {
-    toast({
-      title: "Welcome to Event Hive!",
-      description: "Explore our amazing events below.",
-    });
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    // The query will automatically refetch due to the queryKey including searchParams
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
-      <section className="relative hero-gradient text-white py-20 lg:py-28">
-        <div className="absolute inset-0 bg-black bg-opacity-20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="text-center lg:text-left">
-              <h1 className="text-4xl lg:text-6xl font-bold mb-6 leading-tight">
-                Discover and experience 
-                <span className="block">extraordinary Events</span>
-              </h1>
-              <p className="text-xl lg:text-2xl mb-8 text-purple-100 leading-relaxed">
-                Enter in the world of events. Discover new life latest Events or start creating your own!
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Button 
-                  size="lg" 
-                  className="bg-white text-primary hover:bg-gray-100 font-semibold text-lg px-8 py-4 h-auto"
-                  onClick={handleDiscoverNow}
-                >
-                  Discover now
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="lg"
-                  className="border-2 border-white text-white hover:bg-white hover:text-primary font-semibold text-lg px-8 py-4 h-auto"
-                >
-                  <Play className="w-5 h-5 mr-2" />
-                  Watch video
-                </Button>
-              </div>
-            </div>
-            <div className="relative">
-              <div className="w-full max-w-md mx-auto">
-                <div className="glass-card rounded-3xl p-8 text-center">
-                  <div className="text-8xl mb-4">🏆</div>
-                  <div className="text-6xl mb-4">✈️</div>
-                  <div className="text-4xl">🎭</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Search and Filter Section */}
-      <section className="py-12 bg-white">
+      <div className="bg-gradient-to-br from-primary to-purple-600 text-white py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Card className="shadow-xl border-0 p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Find Your Perfect Event</h2>
-            <div className="grid md:grid-cols-4 gap-6">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Search Events</label>
-                <div className="relative">
+          <div className="text-center max-w-3xl mx-auto">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+              Discover Amazing Events Near You
+            </h1>
+            <p className="text-xl md:text-2xl text-gray-100 mb-12">
+              Find and attend the best events in your area. From conferences to workshops,
+              we've got you covered.
+            </p>
+          </div>
+
+          {/* Search Filters */}
+          <Card className="max-w-4xl mx-auto transform translate-y-16">
+            <CardContent className="p-6">
+              <form onSubmit={handleSearch} className="grid md:grid-cols-4 gap-4">
+                <div>
                   <Input
-                    placeholder="Search by title..."
-                    value={localSearch}
-                    onChange={(e) => setLocalSearch(e.target.value)}
-                    className="form-input"
+                    placeholder="Search events..."
+                    value={searchParams.search}
+                    onChange={(e) =>
+                      setSearchParams((prev) => ({ ...prev, search: e.target.value }))
+                    }
+                    className="w-full"
                   />
-                  <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Event Type</label>
-                <Select value={localType} onValueChange={setLocalType}>
-                  <SelectTrigger className="form-input">
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="conference">Conference</SelectItem>
-                    <SelectItem value="workshop">Workshop</SelectItem>
-                    <SelectItem value="networking">Networking</SelectItem>
-                    <SelectItem value="seminar">Seminar</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Location</label>
-                <Select value={localLocation} onValueChange={setLocalLocation}>
-                  <SelectTrigger className="form-input">
-                    <SelectValue placeholder="All Locations" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Locations</SelectItem>
-                    <SelectItem value="New York">New York</SelectItem>
-                    <SelectItem value="London">London</SelectItem>
-                    <SelectItem value="San Francisco">San Francisco</SelectItem>
-                    <SelectItem value="Lucknow">Lucknow</SelectItem>
-                    <SelectItem value="Mumbai">Mumbai</SelectItem>
-                    <SelectItem value="Bangalore">Bangalore</SelectItem>
-                    <SelectItem value="Delhi">Delhi</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Date</label>
-                <Input
-                  type="date"
-                  value={localDate}
-                  onChange={(e) => setLocalDate(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-center">
-              <Button onClick={handleSearch} size="lg" className="px-8">
-                <Search className="w-4 h-4 mr-2" />
-                Search Events
-              </Button>
-            </div>
+                <div>
+                  <Select
+                    value={searchParams.eventType}
+                    onValueChange={(value) =>
+                      setSearchParams((prev) => ({ ...prev, eventType: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Event Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="conference">Conference</SelectItem>
+                      <SelectItem value="workshop">Workshop</SelectItem>
+                      <SelectItem value="networking">Networking</SelectItem>
+                      <SelectItem value="seminar">Seminar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Input
+                    type="text"
+                    placeholder="Location"
+                    value={searchParams.location}
+                    onChange={(e) =>
+                      setSearchParams((prev) => ({ ...prev, location: e.target.value }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="date"
+                    value={searchParams.date}
+                    onChange={(e) =>
+                      setSearchParams((prev) => ({ ...prev, date: e.target.value }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+              </form>
+            </CardContent>
           </Card>
         </div>
-      </section>
+      </div>
 
-      {/* Listed Events Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-12">Listed Events</h2>
-          
-          {isLoading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <div className="h-48 bg-gray-300"></div>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="h-6 bg-gray-300 rounded"></div>
-                    <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : events.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">No Events Found</h3>
-              <p className="text-gray-600 mb-6">
-                {Object.keys(searchParams).length > 0 
-                  ? "Try adjusting your search criteria to find more events."
-                  : "No events are currently available. Check back later!"}
-              </p>
-              {Object.keys(searchParams).length > 0 && (
-                <Button onClick={() => {
-                  setSearchParams({});
-                  setLocalSearch("");
-                  setLocalType("");
-                  setLocalLocation("");
-                  setLocalDate("");
-                }}>
-                  Clear Filters
-                </Button>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {events.map((event) => (
-                  <EventCard key={event.id} event={event} />
-                ))}
-              </div>
-
-              {events.length >= 9 && (
-                <div className="text-center mt-12">
-                  <Button size="lg" className="px-8">
-                    Load more...
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </section>
+      {/* Events Grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        {isLoading ? (
+          <div className="text-center">Loading events...</div>
+        ) : events.length === 0 ? (
+          <div className="text-center">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">No Events Found</h2>
+            <p className="text-gray-600">
+              Try adjusting your search filters to find more events.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {events.map((event) => (
+              <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                {event.imageUrl && (
+                  <div className="aspect-video w-full overflow-hidden">
+                    <img
+                      src={event.imageUrl}
+                      alt={event.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <CardContent className="p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    {event.title}
+                  </h3>
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center text-gray-600">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      <span>{format(new Date(event.startDate), "MMM d, yyyy")}</span>
+                    </div>
+                    <div className="flex items-center text-gray-600">
+                      <Clock className="w-4 h-4 mr-2" />
+                      <span>
+                        {event.startTime} - {event.endTime}
+                      </span>
+                    </div>
+                    <div className="flex items-center text-gray-600">
+                      <MapPin className="w-4 h-4 mr-2" />
+                      <span>{event.location}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center pt-4 border-t">
+                    <div className="text-sm font-medium">
+                      <span className="text-primary">{event.eventType}</span>
+                      <span className="mx-2">•</span>
+                      <span>{event.cost}</span>
+                    </div>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => navigate(`/events/${event._id}`)}
+                    >
+                      View Details
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
