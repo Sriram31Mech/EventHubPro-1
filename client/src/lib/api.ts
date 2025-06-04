@@ -2,7 +2,7 @@ import { apiRequest } from "./queryClient";
 import { getAuthHeaders } from "./auth";
 
 export interface Event {
-  id: number;
+  _id: string;
   title: string;
   description: string;
   venue: string;
@@ -14,11 +14,11 @@ export interface Event {
   eventType: string;
   location: string;
   imageUrl?: string;
-  adminId: number;
+  adminId: string;
   isAiGenerated: boolean;
   createdAt: string;
   admin?: {
-    id: number;
+    _id: string;
     name: string;
     email: string;
   };
@@ -46,27 +46,19 @@ export interface EventSearchParams {
 }
 
 export const eventsAPI = {
-  createEvent: async (data: CreateEventRequest): Promise<Event> => {
-    const formData = new FormData();
-    
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'image' && value instanceof File) {
-        formData.append('image', value);
-      } else if (value !== undefined) {
-        formData.append(key, value as string);
-      }
-    });
-
+  createEvent: async (formData: FormData): Promise<Event> => {
     const response = await fetch("/api/events", {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders(),
+      },
       body: formData,
       credentials: "include",
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || response.statusText);
+      const error = await response.json();
+      throw new Error(error.message || response.statusText);
     }
 
     const result = await response.json();
@@ -94,7 +86,8 @@ export const eventsAPI = {
     });
 
     if (!response.ok) {
-      throw new Error(response.statusText);
+      const error = await response.json();
+      throw new Error(error.message || response.statusText);
     }
 
     const result = await response.json();
@@ -118,17 +111,23 @@ export const eventsAPI = {
     });
 
     if (!response.ok) {
-      throw new Error(response.statusText);
+      const error = await response.json();
+      throw new Error(error.message || response.statusText);
     }
 
     return await response.json();
   },
 
-  deleteEvent: async (id: number): Promise<void> => {
-    await fetch(`/api/events/${id}`, {
+  deleteEvent: async (id: string): Promise<void> => {
+    const response = await fetch(`/api/events/${id}`, {
       method: "DELETE",
       headers: getAuthHeaders(),
       credentials: "include",
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || response.statusText);
+    }
   }
 };
