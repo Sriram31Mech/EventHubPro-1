@@ -1,0 +1,82 @@
+Fullstack Development Assessment Task Sheet 
+Objective 
+Build an Event Management Platform with Admin and User flows as per the provided user 
+stories. The task assesses skills in system design, frontend and backend development, 
+generative AI integration, and deployment. 
+Project Overview 
+The Event Management Platform is a web-based application designed to streamline event 
+creation and discovery, supporting two primary roles: Admin and User. Admins can securely 
+register, create events with AI-generated descriptions. Users can sign up, browse, and filter 
+events in real time based on preferences like date, type, and location. 
+User Journey 
+1. Admin Flow Path 
+Registration → Create Event → Dashboard (List of Events) 
+2.User Flow Path 
+Sign Up / Login → Home Page (Browse & Filter Events) 
+List of Pages 
+Admin Pages 
+● Register Page (Admin Registration) 
+● Create Event Page 
+● Dashboard Page (List of Admin’s Events) 
+User Pages 
+● Sign Up / Sign In Page 
+● Home Page (Hero Section + Search Filters) 
+● 404 Error Page 
+1. System Design (Architecture + Schema) 
+Goal: Assess planning, thinking, and system design skills. 
+Tasks: 
+● System Architecture Diagram 
+○ Create a high-level architecture diagram (use tools like draw.io or Lucidchart). 
+● Tech Stack Justification 
+○ Justify tech stack based on scalability, ease of use, and project requirements. 
+● Project Setup: 
+○ Set up a GitHub repository with a clear README. 
+○ Define folder structure for frontend and backend. 
+○ Specify tech stack (e.g., React/Next.js, Node.js, Express, MongoDB/PostgreSQL, 
+JWT for auth, Axios for API calls).. 
+2. Frontend Development 
+Goal: Build responsive and interactive UI for Admin and User flows as per user stories. 
+Tasks: 
+● Admin Flow Pages: 
+○ Login Page: Build a login page with name, email, and interactive Login buttons. 
+○ Create Event Page: Create a Form page with event details (title, venue, dates, 
+time, description, image, cost type) and AI description generator. 
+○ Dashboard Page: Develop a dashboard that displays admin-created events with 
+event cards. 
+● User Flow Pages: 
+○ Sign Up / Login Page: Create a Login Form with email and password and also a 
+signup form with name, email, password, and confirm password. 
+○ Home Page: Build a page with Hero section, search filters (type, location, date), 
+and event cards. 
+○ 404 Error Page: Create a simple error page for invalid routes. 
+● Implement form validations (e.g., alphabetic name, email format, password strength). 
+● Handle edge cases (e.g., invalid inputs, double-clicks). 
+● Display inline errors and toast/snackbar for server responses. 
+● Integrate JWT token storage (local/session storage) for auth. 
+● Implement real-time search filters on the Home Page. 
+3. Backend Development  
+Goal: Build a secure system to handle authentication, event creation, and event retrieval. 
+Tasks: 
+● Implement JWT-based authentication (store tokens securely). 
+● Create endpoints for auth and event management. 
+● Develop an endpoint to fetch events, supporting admin-specific queries as well as 
+filtered event retrieval for users. 
+● Integrate database with schema from System Design. 
+● Handle file uploads for event images (max 5MB, .jpg/.jpeg/.png). 
+● Implement error handling for invalid inputs and edge cases (e.g., duplicate email, invalid 
+dates). 
+4. Generative AI Integration 
+Goal: Integrate an AI service to generate event descriptions. 
+Tasks: 
+● Add a “Generate Description” button on the Create Event page, enabled only when 
+required fields are filled. 
+● Auto-fill description field with AI response, keeping it editable. 
+● Label AI-generated text and allow manual edits. 
+Submission Guidelines 
+● Submit GitHub repository link with README containing: 
+○ Setup instructions. 
+○ Brief explanation of approach (max 300 words). 
+● Ensure all deliverables (architecture diagram, code) are included. 
+● Test the application thoroughly for functionality and edge cases. 
+Please refer to the User stories document for a detailed description of the project 
+requirements and functionality. 
