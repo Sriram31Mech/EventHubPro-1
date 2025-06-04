@@ -1,9 +1,18 @@
-import OpenAI from "openai";
+import type { Response } from 'node-fetch';
+import fetch from 'node-fetch';
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || "AIzaSyDMxVE4pjhhapWPWhoPPNR-S4hY60wDZQI"
-});
+const GEMINI_API_KEY = "AIzaSyDMxVE4pjhhapWPWhoPPNR-S4hY60wDZQI";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+}
 
 export async function generateEventDescription(
   title: string, 
@@ -12,77 +21,106 @@ export async function generateEventDescription(
   location?: string
 ): Promise<string> {
   try {
-    const prompt = `Generate a compelling and professional event description for the following event:
+    const prompt = `Write an engaging event description for:
+${title} at ${venue}
 
-Event Title: ${title}
-Venue: ${venue}
-Event Type: ${eventType || 'conference'}
-Location: ${location || 'venue location'}
+Additional details:
+- Type: ${eventType || 'conference'}
+- Location: ${location || venue}
 
-Create an engaging description that:
-- Highlights the value proposition of attending
-- Mentions networking opportunities
-- Emphasizes learning and growth potential
-- Uses professional yet inviting language
-- Is between 100-200 words
-- Sounds authentic and not overly promotional
+The description should:
+1. Be professional and engaging
+2. Highlight key benefits of attending
+3. Mention networking opportunities
+4. Focus on learning and growth
+5. Be between 100-200 words
+6. Sound natural and inviting`;
 
-Please respond with only the description text, no additional formatting or labels.`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert event marketing copywriter who creates compelling event descriptions that attract attendees and clearly communicate value."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      max_tokens: 300,
-      temperature: 0.7,
+    const response: Response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt
+              }
+            ]
+          }
+        ]
+      })
     });
 
-    const description = response.choices[0].message.content;
-    
-    if (!description) {
-      throw new Error("No description generated");
+    if (!response.ok) {
+      const errorData: any = await response.json();
+      console.error('Gemini API Error:', errorData);
+      
+      if (response.status === 429) {
+        throw new Error("Rate limit reached. Please try again in a few moments.");
+      }
+      if (response.status === 403) {
+        throw new Error("API key error. Please contact support.");
+      }
+      throw new Error("Failed to generate description. Please try again.");
     }
 
-    return description;
-  } catch (error: any) {
-    console.error("Error generating event description:", error);
+    const data: GeminiResponse = await response.json();
     
-    if (error.code === 'insufficient_quota') {
-      throw new Error("AI service quota exceeded. Please try again later.");
-    } else if (error.code === 'invalid_api_key') {
-      throw new Error("AI service configuration error. Please contact support.");
-    } else if (error.code === 'rate_limit_exceeded') {
-      throw new Error("Too many requests. Please wait a moment and try again.");
+    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      throw new Error("No valid response from AI service");
+    }
+
+    const generatedText = data.candidates[0].content.parts[0].text.trim();
+
+    // Validate the generated text
+    if (!generatedText || generatedText.length < 50) {
+      throw new Error("Generated description is too short or empty");
+    }
+
+    return generatedText;
+  } catch (error: any) {
+    console.error("Error in generateEventDescription:", error);
+    
+    // Map specific errors to user-friendly messages
+    if (error.message?.includes("API key")) {
+      throw new Error("API configuration issue. Please contact support.");
+    }
+    if (error.message?.includes("rate limit")) {
+      throw new Error("Service is busy. Please try again in a few moments.");
+    }
+    if (error.message?.includes("too short")) {
+      throw new Error("Could not generate a suitable description. Please try again.");
     }
     
-    throw new Error("Failed to generate description. Please try again or write your own description.");
+    throw new Error(error.message || "Failed to generate description. Please try again.");
   }
 }
 
-// Alternative function for batch description generation if needed
+// Helper function for batch generation
 export async function generateMultipleDescriptions(
   events: Array<{ title: string; venue: string; eventType?: string; location?: string }>
 ): Promise<string[]> {
-  try {
-    const descriptions = await Promise.all(
-      events.map(event => generateEventDescription(
-        event.title, 
-        event.venue, 
-        event.eventType, 
+  const results = await Promise.allSettled(
+    events.map(event => 
+      generateEventDescription(
+        event.title,
+        event.venue,
+        event.eventType,
         event.location
-      ))
-    );
-    return descriptions;
-  } catch (error) {
-    console.error("Error generating multiple descriptions:", error);
-    throw new Error("Failed to generate descriptions for multiple events");
-  }
+      )
+    )
+  );
+  
+  const descriptions = results.map(result => {
+    if (result.status === 'fulfilled') {
+      return result.value;
+    }
+    console.error('Failed to generate description:', result.reason);
+    return 'Description generation failed. Please try again.';
+  });
+
+  return descriptions;
 }
