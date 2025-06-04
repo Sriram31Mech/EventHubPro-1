@@ -7,6 +7,12 @@ const objectIdSchema = z.string().refine(
   (val) => ({ message: `${val} is not a valid ObjectId` })
 );
 
+// Image schema
+const imageSchema = z.object({
+  data: z.any(), // Buffer type will be handled at runtime
+  contentType: z.string(),
+});
+
 // Base schemas without refinements
 const baseEventSchema = z.object({
   _id: objectIdSchema,
@@ -34,6 +40,7 @@ const baseEventSchema = z.object({
   location: z.string()
     .min(2, "Location must be at least 2 characters")
     .max(100, "Location must be less than 100 characters"),
+  image: imageSchema.optional(),
   imageUrl: z.string().nullable().optional(),
   adminId: objectIdSchema,
   isAiGenerated: z.boolean().default(false),

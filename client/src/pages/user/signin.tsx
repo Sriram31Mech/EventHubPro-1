@@ -43,7 +43,7 @@ export default function UserSignIn() {
         title: "Welcome back!",
         description: "Redirecting to home page...",
       });
-      setTimeout(() => navigate("/"), 2000);
+      setTimeout(() => navigate("/home"), 2000);
     },
     onError: (error: any) => {
       toast({

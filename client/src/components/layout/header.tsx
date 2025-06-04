@@ -22,16 +22,20 @@ export default function Header() {
 
   const handleLogout = () => {
     authAPI.logout();
-    navigate("/");
-    window.location.reload();
+    navigate("/signin");
   };
+
+  // Don't show header on auth pages
+  if (location === "/signin" || location === "/signup" || location === "/admin/register") {
+    return null;
+  }
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <Link href="/">
+            <Link href={isAuthenticated ? "/home" : "/signin"}>
               <h1 className="text-2xl font-bold text-gray-900 cursor-pointer">
                 Event <span className="text-primary">Hive</span>
               </h1>
@@ -39,13 +43,15 @@ export default function Header() {
           </div>
 
           <nav className="hidden md:flex space-x-8">
-            <Link href="/">
-              <span className={`font-medium transition-colors duration-200 cursor-pointer ${
-                location === "/" ? "text-primary" : "text-gray-700 hover:text-primary"
-              }`}>
-                Home
-              </span>
-            </Link>
+            {isAuthenticated && (
+              <Link href="/home">
+                <span className={`font-medium transition-colors duration-200 cursor-pointer ${
+                  location === "/home" ? "text-primary" : "text-gray-700 hover:text-primary"
+                }`}>
+                  Home
+                </span>
+              </Link>
+            )}
             
             {isAdmin && (
               <>
@@ -67,41 +73,26 @@ export default function Header() {
             )}
           </nav>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center">
             {isAuthenticated ? (
-              <>
-                {isAdmin && (
-                  <Link href="/admin/create-event">
-                    <Button size="sm" className="hidden md:flex">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Event
-                    </Button>
-                  </Link>
-                )}
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <User className="w-4 h-4" />
-                      <span className="hidden md:block">{user?.user?.name || "User"}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <User className="w-4 h-4 mr-2" />
-                      Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Settings className="w-4 h-4 mr-2" />
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleLogout}>
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="relative">
+                    <User className="w-5 h-5" />
+                    <span className="sr-only">User menu</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled>
+                    <User className="w-4 h-4 mr-2" />
+                    <span>{user?.name}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    <span>Sign Out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <div className="flex items-center space-x-2">
                 <Link href="/signin">

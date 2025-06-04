@@ -2,7 +2,7 @@ import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, loginSchema, insertEventSchema, eventSearchSchema } from "@shared/schema";
+import { insertUserSchema, loginSchema, insertEventSchema, eventSearchSchema, type Event } from "@shared/schema";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -25,7 +25,7 @@ const storage_multer = multer.diskStorage({
 });
 
 const upload = multer({
-  storage: storage_multer,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
@@ -66,6 +66,13 @@ function requireAdmin(req: any, res: any, next: any) {
     return res.status(403).json({ message: 'Admin access required' });
   }
   next();
+}
+
+interface EventWithBuffer extends Event {
+  image?: {
+    data: Buffer;
+    contentType: string;
+  };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -170,8 +177,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const eventData = {
         ...req.body,
         adminId: req.user._id,
-        imageUrl: req.file ? `/uploads/${req.file.filename}` : null
       };
+
+      // Add image data if present
+      if (req.file) {
+        eventData.image = {
+          data: req.file.buffer,
+          contentType: req.file.mimetype
+        };
+      }
 
       // Validate the event data
       const validatedData = insertEventSchema.parse({
@@ -184,22 +198,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         message: "Event created successfully",
-        event
+        event: {
+          ...event,
+          imageUrl: event.image?.data 
+            ? `data:${event.image.contentType};base64,${event.image.data.toString('base64')}`
+            : null
+        }
       });
     } catch (error: any) {
-      // If there was an error and a file was uploaded, delete it
-      if (req.file) {
-        try {
-          fs.unlinkSync(req.file.path);
-        } catch (unlinkError) {
-          console.error('Failed to delete uploaded file:', unlinkError);
-        }
-      }
-
       if (error.errors) {
         return res.status(400).json({ message: JSON.stringify(error.errors, null, 2) });
       }
-
       res.status(400).json({ message: error.message });
     }
   });
@@ -212,7 +221,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await storage.searchEvents(searchParams)
         : await storage.getAllEvents();
 
-      res.json({ events });
+      // Convert binary image data to base64 URLs
+      const eventsWithImageUrls = events.map((event) => ({
+        ...event,
+        imageUrl: event.image?.data 
+          ? `data:${event.image.contentType};base64,${event.image.data.toString('base64')}`
+          : null
+      }));
+
+      res.json({ events: eventsWithImageUrls });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -222,7 +239,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/events/my", authenticateToken, requireAdmin, async (req: any, res) => {
     try {
       const events = await storage.getEventsByAdmin(req.user._id);
-      res.json({ events });
+      
+      // Convert binary image data to base64 URLs
+      const eventsWithImageUrls = events.map((event) => ({
+        ...event,
+        imageUrl: event.image?.data 
+          ? `data:${event.image.contentType};base64,${event.image.data.toString('base64')}`
+          : null
+      }));
+
+      res.json({ events: eventsWithImageUrls });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -235,14 +261,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!event) {
         return res.status(404).json({ message: "Event not found" });
       }
-      res.json({ event });
+
+      // Convert binary image data to base64 URL if present
+      const eventWithImageUrl = {
+        ...event,
+        imageUrl: event.image?.data 
+          ? `data:${event.image.contentType};base64,${event.image.data.toString('base64')}`
+          : null
+      };
+
+      res.json({ event: eventWithImageUrl });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
 
   // Update event
-  app.put("/api/events/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+  app.put("/api/events/:id", authenticateToken, requireAdmin, upload.single('image'), async (req: any, res) => {
     try {
       const event = await storage.getEvent(req.params.id);
       if (!event) {
@@ -253,8 +288,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You can only update your own events" });
       }
 
-      const updatedEvent = await storage.updateEvent(req.params.id, req.body);
-      res.json({ event: updatedEvent });
+      const updateData = { ...req.body };
+
+      // Add image data if present
+      if (req.file) {
+        updateData.image = {
+          data: req.file.buffer,
+          contentType: req.file.mimetype
+        };
+      }
+
+      const updatedEvent = await storage.updateEvent(req.params.id, updateData);
+      if (!updatedEvent) {
+        return res.status(404).json({ message: "Failed to update event" });
+      }
+
+      res.json({
+        message: "Event updated successfully",
+        event: {
+          ...updatedEvent,
+          imageUrl: updatedEvent.image?.data 
+            ? `data:${updatedEvent.image.contentType};base64,${updatedEvent.image.data.toString('base64')}`
+            : null
+        }
+      });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
